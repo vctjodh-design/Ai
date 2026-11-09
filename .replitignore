@@ -3,3 +3,6 @@
 
 # No need to store the pnpm store twice.
 .local
+
+# Do not include large training weights in deployment bundles.
+models/qwen2.5-0.5b/model.safetensors

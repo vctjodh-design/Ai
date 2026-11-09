@@ -53,3 +53,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Large model weights are downloaded locally and should not enter Git history.
+/models/qwen2.5-0.5b/model.safetensors
