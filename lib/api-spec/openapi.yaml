@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: chat
+    description: Local Qwen chat
 paths:
   /healthz:
     get:
@@ -24,6 +26,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /chat:
+    post:
+      operationId: sendChatMessage
+      tags: [chat]
+      summary: Send a message to the local Qwen model
+      description: Generates an assistant reply using the supplied conversation history.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: Assistant reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatOutput"
+        "400":
+          description: Invalid conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatError"
+        "429":
+          description: The local model is already generating a reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatError"
+        "503":
+          description: The local model could not complete the request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatError"
+        "504":
+          description: Model generation timed out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +78,46 @@ components:
           type: string
       required:
         - status
+    ChatMessageInput:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required: [role, content]
+    ChatInput:
+      type: object
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 23
+          items:
+            $ref: "#/components/schemas/ChatMessageInput"
+      required: [messages]
+    ChatAssistantMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [assistant]
+        content:
+          type: string
+      required: [role, content]
+    ChatOutput:
+      type: object
+      properties:
+        message:
+          $ref: "#/components/schemas/ChatAssistantMessage"
+      required: [message]
+    ChatError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
 

@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+import sys
 
 import torch
 from peft import PeftModel
@@ -31,6 +33,11 @@ def main() -> None:
         default=DEFAULT_ADAPTER_DIR,
         help="Directory containing the trained LoRA adapter.",
     )
+    parser.add_argument(
+        "--messages-stdin",
+        action="store_true",
+        help="Read a JSON object with conversation messages from standard input.",
+    )
     args = parser.parse_args()
 
     if not (args.adapter_dir / "adapter_config.json").is_file():
@@ -38,11 +45,38 @@ def main() -> None:
             f"The LoRA adapter is missing: {args.adapter_dir}. "
             "Run scripts/train_lora.py first."
         )
-    question = " ".join(args.question).strip()
-    if not question:
-        question = input("Question: ").strip()
-    if not question:
-        raise ValueError("Enter a question.")
+
+    if args.messages_stdin:
+        try:
+            payload = json.load(sys.stdin)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Expected a JSON object on standard input.") from exc
+        raw_messages = payload.get("messages") if isinstance(payload, dict) else None
+        if not isinstance(raw_messages, list) or not raw_messages:
+            raise ValueError("The JSON input must contain a non-empty messages list.")
+
+        messages = []
+        for message in raw_messages:
+            if not isinstance(message, dict):
+                raise ValueError("Each message must be an object.")
+            role = message.get("role")
+            content = message.get("content")
+            if role not in {"user", "assistant"} or not isinstance(content, str):
+                raise ValueError("Messages need a user or assistant role and text content.")
+            if not content.strip():
+                raise ValueError("Message content cannot be empty.")
+            messages.append({"role": role, "content": content})
+        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+    else:
+        question = " ".join(args.question).strip()
+        if not question:
+            question = input("Question: ").strip()
+        if not question:
+            raise ValueError("Enter a question.")
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": question},
+        ]
 
     tokenizer = AutoTokenizer.from_pretrained(
         args.adapter_dir,
@@ -58,10 +92,6 @@ def main() -> None:
     model = PeftModel.from_pretrained(base, args.adapter_dir, is_trainable=False)
     model.eval()
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": question},
-    ]
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=True,

@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Qwen Chat"
+description = "A browser chat for the local fine-tuned Qwen model, with multi-turn conversation context and responses from the project’s shared API."
+version = "1.0.0"
+id = "artifacts/qwen-chat"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21437
+
+[services.development]
+run = "pnpm --filter @workspace/qwen-chat run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/qwen-chat", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/qwen-chat/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21437"
+BASE_PATH = "/"
