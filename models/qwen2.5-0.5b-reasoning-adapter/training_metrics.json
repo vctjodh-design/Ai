@@ -1,0 +1,14 @@
+{
+  "base_model": "Qwen/Qwen2.5-0.5B",
+  "training_examples": 64,
+  "validation_examples": 8,
+  "steps": 64,
+  "epochs_requested": 1,
+  "max_length": 256,
+  "learning_rate": 0.0001,
+  "train_loss_mean": 1.4806381622329354,
+  "validation_loss_mean": 1.538448728621006,
+  "elapsed_seconds": 102.62,
+  "device": "cpu",
+  "adapter": "LoRA r=8, alpha=16; q_proj and v_proj"
+}

@@ -16,6 +16,9 @@ out-tsc
 
 # dependencies
 node_modules
+.pythonlibs/
+__pycache__/
+*.pyc
 
 # IDEs and editors
 /.idea
@@ -56,3 +59,6 @@ Thumbs.db
 
 # Large model weights are downloaded locally and should not enter Git history.
 /models/qwen2.5-0.5b/model.safetensors
+
+# Raw dataset downloads can be regenerated from the pinned source revisions.
+/data/raw/

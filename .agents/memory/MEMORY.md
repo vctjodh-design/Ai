@@ -1,0 +1,1 @@
+- [CPU-only PyTorch dependencies](cpu-pytorch-package-resolution.md) — keep Hugging Face libraries on PyPI; only map Torch to the CPU wheel index.

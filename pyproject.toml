@@ -1,0 +1,23 @@
+[project]
+name = "llm-fine-tuning"
+version = "0.1.0"
+description = "Dataset preparation and fine-tuning utilities for the local Qwen base model."
+requires-python = ">=3.13"
+dependencies = [
+  "accelerate",
+  "peft",
+  "pyarrow",
+  "transformers>=4.37,<6",
+  "torch==2.15.0+cpu; sys_platform == 'linux'",
+]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
