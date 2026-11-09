@@ -169,8 +169,8 @@ export const getSendChatMessageUrl = () => {
 }
 
 /**
- * Generates an assistant reply using the supplied conversation history.
- * @summary Send a message to the local Qwen model
+ * Generates an assistant reply and includes cited web sources when research mode is selected.
+ * @summary Generate a local or web-researched answer
  */
 export const sendChatMessage = async (chatInput: ChatInput, options?: Parameters<typeof customFetch>[1]): Promise<ChatOutput> => {
 
@@ -236,7 +236,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SendChatMessageMutationVariables = {data: BodyType<ChatInput>}
 
     /**
- * @summary Send a message to the local Qwen model
+ * @summary Generate a local or web-researched answer
  */
 export const useSendChatMessage = <TError = ErrorType<ChatError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendChatMessage>>, TError,SendChatMessageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

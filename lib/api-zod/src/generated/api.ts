@@ -18,8 +18,8 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Generates an assistant reply using the supplied conversation history.
- * @summary Send a message to the local Qwen model
+ * Generates an assistant reply and includes cited web sources when research mode is selected.
+ * @summary Generate a local or web-researched answer
  */
 export const sendChatMessageBodyMessagesItemContentMax = 4000;
 
@@ -31,13 +31,19 @@ export const SendChatMessageBody = zod.object({
   "messages": zod.array(zod.object({
   "role": zod.enum(['user', 'assistant']),
   "content": zod.string().min(1).max(sendChatMessageBodyMessagesItemContentMax)
-})).min(1).max(sendChatMessageBodyMessagesMax)
+})).min(1).max(sendChatMessageBodyMessagesMax),
+  "mode": zod.enum(['local', 'research']).describe('Use the local model or search the web before answering.')
 })
 
 export const SendChatMessageResponse = zod.object({
   "message": zod.object({
   "role": zod.enum(['assistant']),
-  "content": zod.string()
+  "content": zod.string(),
+  "sources": zod.array(zod.object({
+  "title": zod.string(),
+  "url": zod.string().url(),
+  "snippet": zod.string()
+}))
 })
 })
 

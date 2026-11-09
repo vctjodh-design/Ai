@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ChatInputMode } from './chatInputMode';
 import type { ChatMessageInput } from './chatMessageInput';
 
 export interface ChatInput {
@@ -13,4 +14,6 @@ export interface ChatInput {
      * @maxItems 23
      */
   messages: ChatMessageInput[];
+  /** Use the local model or search the web before answering. */
+  mode: ChatInputMode;
 }

@@ -17,9 +17,10 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "models" / "qwen2.5-0.5b"
 DEFAULT_ADAPTER_DIR = ROOT / "models" / "qwen2.5-0.5b-reasoning-adapter-full"
 SYSTEM_PROMPT = (
-    "You are a helpful assistant. Answer accurately. For multi-step problems, "
-    "explain the key steps briefly and state the final answer. Be clear when "
-    "information is uncertain."
+    "You are a helpful assistant. Give accurate, grounded answers. For multi-step "
+    "problems, explain the key steps briefly, state important assumptions, and "
+    "give a direct final answer. Do not present hidden chain-of-thought. If you "
+    "do not know or the evidence is uncertain, say so rather than inventing details."
 )
 
 
@@ -66,7 +67,16 @@ def main() -> None:
             if not content.strip():
                 raise ValueError("Message content cannot be empty.")
             messages.append({"role": role, "content": content})
-        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+        system_prompt = payload.get("systemPrompt", "") if isinstance(payload, dict) else ""
+        if not isinstance(system_prompt, str) or len(system_prompt) > 12_000:
+            raise ValueError("The optional system prompt must be a string under 12,000 characters.")
+        messages.insert(
+            0,
+            {
+                "role": "system",
+                "content": "\n\n".join(part for part in (SYSTEM_PROMPT, system_prompt.strip()) if part),
+            },
+        )
     else:
         question = " ".join(args.question).strip()
         if not question:

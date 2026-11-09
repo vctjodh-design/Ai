@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChatAssistantMessageRole } from './chatAssistantMessageRole';
+import type { ChatSource } from './chatSource';
 
 export interface ChatAssistantMessage {
   role: ChatAssistantMessageRole;
   content: string;
+  sources: ChatSource[];
 }

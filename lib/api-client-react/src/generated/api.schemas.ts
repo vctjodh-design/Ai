@@ -26,12 +26,25 @@ export interface ChatMessageInput {
   content: string;
 }
 
+/**
+ * Use the local model or search the web before answering.
+ */
+export type ChatInputMode = typeof ChatInputMode[keyof typeof ChatInputMode];
+
+
+export const ChatInputMode = {
+  local: 'local',
+  research: 'research',
+} as const;
+
 export interface ChatInput {
   /**
      * @minItems 1
      * @maxItems 23
      */
   messages: ChatMessageInput[];
+  /** Use the local model or search the web before answering. */
+  mode: ChatInputMode;
 }
 
 export type ChatAssistantMessageRole = typeof ChatAssistantMessageRole[keyof typeof ChatAssistantMessageRole];
@@ -41,9 +54,16 @@ export const ChatAssistantMessageRole = {
   assistant: 'assistant',
 } as const;
 
+export interface ChatSource {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 export interface ChatAssistantMessage {
   role: ChatAssistantMessageRole;
   content: string;
+  sources: ChatSource[];
 }
 
 export interface ChatOutput {

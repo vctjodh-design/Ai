@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Activity, ArrowUp, Bot, Check, CircleAlert, LoaderCircle, Plus, Sparkles, UserRound } from 'lucide-react';
+import { Activity, ArrowUp, Bot, Check, CircleAlert, ExternalLink, LoaderCircle, Plus, Search, Sparkles, UserRound } from 'lucide-react';
 import { getHealthCheckQueryKey, useHealthCheck, useSendChatMessage } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -8,20 +8,48 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
-type Message = { role: 'user' | 'assistant'; content: string };
+type AnswerMode = 'local' | 'research';
+type Source = { title: string; url: string; snippet: string };
+type Message = { role: 'user' | 'assistant'; content: string; sources?: Source[] };
 const STORAGE_KEY = 'qwen-chat-conversation-v1';
 const MAX_CONTEXT_MESSAGES = 23;
 const MAX_CONTEXT_CHARACTERS = 24_000;
+
+function isSource(value: unknown): value is Source {
+  if (!value || typeof value !== 'object') return false;
+  const source = value as Record<string, unknown>;
+  if (
+    typeof source.title !== 'string' ||
+    typeof source.url !== 'string' ||
+    typeof source.snippet !== 'string'
+  ) return false;
+  try {
+    return new URL(source.url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 function loadConversation(): Message[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
     if (!Array.isArray(value)) return [];
-    return value.filter((item): item is Message =>
-      !!item &&
-      (item.role === 'user' || item.role === 'assistant') &&
-      typeof item.content === 'string'
-    );
+    return value.flatMap((item: unknown) => {
+      if (!item || typeof item !== 'object') return [];
+      const message = item as Record<string, unknown>;
+      if (
+        (message.role !== 'user' && message.role !== 'assistant') ||
+        typeof message.content !== 'string'
+      ) return [];
+      const sources = Array.isArray(message.sources)
+        ? message.sources.filter(isSource)
+        : undefined;
+      return [{
+        role: message.role,
+        content: message.content,
+        ...(sources?.length ? { sources } : {}),
+      } as Message];
+    });
   } catch {
     return [];
   }
@@ -49,9 +77,10 @@ function buildContext(history: Message[]): Message[] {
 
 function ChatHome() {
   const [messages, setMessages] = useState<Message[]>(loadConversation);
+  const [mode, setMode] = useState<AnswerMode>('local');
   const [draft, setDraft] = useState('');
   const [requestError, setRequestError] = useState('');
-  const [failedHistory, setFailedHistory] = useState<Message[] | null>(null);
+  const [failedRequest, setFailedRequest] = useState<{ history: Message[]; mode: AnswerMode } | null>(null);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const latestMessagesRef = useRef(messages);
@@ -86,20 +115,20 @@ function ChatHome() {
     element.style.height = `${Math.min(element.scrollHeight, 180)}px`;
   }, [draft]);
 
-  const requestReply = useCallback((history: Message[]) => {
+  const requestReply = useCallback((history: Message[], requestMode: AnswerMode) => {
     setRequestError('');
-    setFailedHistory(null);
+    setFailedRequest(null);
     const context = buildContext(history);
     chatMutation.mutate(
-      { data: { messages: context } },
+      { data: { messages: context, mode: requestMode } },
       {
         onSuccess: (output) => {
           setMessages((current) => [...current, output.message]);
         },
         onError: (error: unknown) => {
           const detail = error instanceof Error ? error.message : '';
-          setRequestError(detail ? `The local endpoint couldn't complete that reply. ${detail}` : 'The local endpoint couldn’t complete that reply. Check the server and try again.');
-          setFailedHistory(history);
+          setRequestError(detail ? `The chat service couldn't complete that reply. ${detail}` : 'The chat service couldn’t complete that reply. Check the server and try again.');
+          setFailedRequest({ history, mode: requestMode });
         },
       },
     );
@@ -113,8 +142,8 @@ function ChatHome() {
     setMessages(nextHistory);
     setDraft('');
     setRequestError('');
-    requestReply(nextHistory);
-  }, [isSending, requestReply]);
+    requestReply(nextHistory, mode);
+  }, [isSending, mode, requestReply]);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -134,7 +163,7 @@ function ChatHome() {
     latestMessagesRef.current = [];
     setDraft('');
     setRequestError('');
-    setFailedHistory(null);
+    setFailedRequest(null);
     chatMutation.reset();
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -181,6 +210,30 @@ function ChatHome() {
             <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             {messages.length === 0 ? 'NEW SESSION' : `${messages.length} ${messages.length === 1 ? 'MESSAGE' : 'MESSAGES'}`}
           </div>
+          <div className="mode-switch" role="group" aria-label="Answer mode">
+            <button
+              className={`mode-option ${mode === 'local' ? 'active' : ''}`}
+              type="button"
+              onClick={() => setMode('local')}
+              disabled={isSending}
+              aria-pressed={mode === 'local'}
+              data-testid="button-mode-local"
+            >
+              <Bot size={13} />
+              Local
+            </button>
+            <button
+              className={`mode-option ${mode === 'research' ? 'active' : ''}`}
+              type="button"
+              onClick={() => setMode('research')}
+              disabled={isSending}
+              aria-pressed={mode === 'research'}
+              data-testid="button-mode-research"
+            >
+              <Search size={13} />
+              Research
+            </button>
+          </div>
           <button
             className="tool-button"
             type="button"
@@ -201,14 +254,14 @@ function ChatHome() {
               <div className="eyebrow mb-3">Ready when you are</div>
               <h2 className="empty-title">Give your adapter<br />something to think about.</h2>
               <p className="empty-description">
-                Test a prompt against the fine-tuned Qwen model running on this project’s local server.
-                Your conversation stays in this browser.
+                Choose Local for concise explanations, or Research to search current web summaries and see linked sources.
+                Search results can be incomplete, so verify important claims.
               </p>
               <div className="suggestions" aria-label="Example prompts">
                 {[
                   'What makes a useful system prompt?',
-                  'Explain your reasoning style.',
-                  'Give me a concise project summary.',
+                  'Show the key steps for solving 18 × 24.',
+                  'Research a recent AI development.',
                 ].map((prompt, index) => (
                   <button
                     className="suggestion"
@@ -237,9 +290,35 @@ function ChatHome() {
                   <div className="min-w-0">
                     <div className="message-meta">
                       <span className="message-name">{message.role === 'assistant' ? 'Qwen adapter' : 'You'}</span>
-                      <span className="message-role">{message.role === 'assistant' ? 'ASSISTANT' : 'PROMPT'}</span>
+                      <span className="message-role">
+                        {message.role === 'assistant'
+                          ? message.sources?.length ? 'WEB RESEARCH' : 'LOCAL REASONING'
+                          : 'PROMPT'}
+                      </span>
                     </div>
                     <div className="message-content" data-testid={`text-message-content-${index}`}>{message.content}</div>
+                    {message.role === 'assistant' && !!message.sources?.length && (
+                      <div className="source-list" aria-label="Research sources">
+                        <div className="source-list-heading"><Search size={12} /> WEB SOURCES</div>
+                        {message.sources.map((source, sourceIndex) => (
+                          <a
+                            className="source-card"
+                            href={source.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            key={`${source.url}-${sourceIndex}`}
+                          >
+                            <span className="source-title">
+                              <span>{source.title}</span>
+                              <ExternalLink size={12} aria-hidden="true" />
+                            </span>
+                            <span className="source-host">{new URL(source.url).hostname.replace(/^www\./, '')}</span>
+                            <span className="source-snippet">{source.snippet}</span>
+                          </a>
+                        ))}
+                        <p className="source-disclaimer">Search-result summaries only; open sources to verify details.</p>
+                      </div>
+                    )}
                   </div>
                 </article>
               ))}
@@ -266,7 +345,7 @@ function ChatHome() {
               </div>
               <button
                 type="button"
-                onClick={() => failedHistory && requestReply(failedHistory)}
+                onClick={() => failedRequest && requestReply(failedRequest.history, failedRequest.mode)}
                 data-testid="button-retry"
               >
                 Retry
@@ -285,7 +364,7 @@ function ChatHome() {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={onComposerKeyDown}
-              placeholder="Message your local Qwen adapter…"
+              placeholder={mode === 'research' ? 'Ask a question to research on the web…' : 'Message your local Qwen adapter…'}
               maxLength={4000}
               disabled={isSending}
               data-testid="input-message"
@@ -300,6 +379,11 @@ function ChatHome() {
               {isSending ? <LoaderCircle size={17} className="animate-spin" /> : <ArrowUp size={18} strokeWidth={2.4} />}
             </button>
           </form>
+          <div className={`mode-caption ${mode === 'research' ? 'research' : ''}`}>
+            {mode === 'research'
+              ? 'Research mode searches current web summaries and attaches source links.'
+              : 'Local mode explains key steps and flags uncertainty.'}
+          </div>
           <div className="composer-foot">
             <span className="footer-note"><Check size={12} /> Conversation saved in this browser</span>
             <span>{draft.length}/4000 <span className="hidden sm:inline">· Enter to send</span></span>

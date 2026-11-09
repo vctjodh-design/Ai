@@ -1,1 +1,2 @@
 - [CPU-only PyTorch dependencies](cpu-pytorch-package-resolution.md) — keep Hugging Face libraries on PyPI; only map Torch to the CPU wheel index.
+- [Qwen web research limits](qwen-web-research-limits.md) — research answers use search-result snippets, so keep citations visible and never imply full-page verification.

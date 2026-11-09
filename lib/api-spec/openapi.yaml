@@ -30,8 +30,8 @@ paths:
     post:
       operationId: sendChatMessage
       tags: [chat]
-      summary: Send a message to the local Qwen model
-      description: Generates an assistant reply using the supplied conversation history.
+      summary: Generate a local or web-researched answer
+      description: Generates an assistant reply and includes cited web sources when research mode is selected.
       requestBody:
         required: true
         content:
@@ -69,6 +69,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatError"
+        "502":
+          description: Web search did not return usable sources
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatError"
 components:
   schemas:
     HealthStatus:
@@ -98,7 +104,11 @@ components:
           maxItems: 23
           items:
             $ref: "#/components/schemas/ChatMessageInput"
-      required: [messages]
+        mode:
+          type: string
+          enum: [local, research]
+          description: Use the local model or search the web before answering.
+      required: [messages, mode]
     ChatAssistantMessage:
       type: object
       properties:
@@ -107,7 +117,22 @@ components:
           enum: [assistant]
         content:
           type: string
-      required: [role, content]
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatSource"
+      required: [role, content, sources]
+    ChatSource:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        snippet:
+          type: string
+      required: [title, url, snippet]
     ChatOutput:
       type: object
       properties:
