@@ -106,6 +106,9 @@ def main() -> None:
             input_ids,
             max_new_tokens=args.max_new_tokens,
             do_sample=False,
+            repetition_penalty=1.12,
+            no_repeat_ngram_size=3,
+            renormalize_logits=True,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
