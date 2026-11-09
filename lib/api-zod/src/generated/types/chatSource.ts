@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ChatSourceContentType } from './chatSourceContentType';
 
 export interface ChatSource {
   title: string;
   url: string;
   snippet: string;
+  contentType: ChatSourceContentType;
 }

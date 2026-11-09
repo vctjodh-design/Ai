@@ -54,10 +54,19 @@ export const ChatAssistantMessageRole = {
   assistant: 'assistant',
 } as const;
 
+export type ChatSourceContentType = typeof ChatSourceContentType[keyof typeof ChatSourceContentType];
+
+
+export const ChatSourceContentType = {
+  page_excerpt: 'page_excerpt',
+  search_summary: 'search_summary',
+} as const;
+
 export interface ChatSource {
   title: string;
   url: string;
   snippet: string;
+  contentType: ChatSourceContentType;
 }
 
 export interface ChatAssistantMessage {

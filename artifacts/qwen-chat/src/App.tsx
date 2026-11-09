@@ -9,24 +9,30 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 type AnswerMode = 'local' | 'research';
-type Source = { title: string; url: string; snippet: string };
+type Source = { title: string; url: string; snippet: string; contentType: 'page_excerpt' | 'search_summary' };
 type Message = { role: 'user' | 'assistant'; content: string; sources?: Source[] };
 const STORAGE_KEY = 'qwen-chat-conversation-v1';
 const MAX_CONTEXT_MESSAGES = 23;
 const MAX_CONTEXT_CHARACTERS = 24_000;
 
-function isSource(value: unknown): value is Source {
-  if (!value || typeof value !== 'object') return false;
+function parseSource(value: unknown): Source | null {
+  if (!value || typeof value !== 'object') return null;
   const source = value as Record<string, unknown>;
   if (
     typeof source.title !== 'string' ||
     typeof source.url !== 'string' ||
     typeof source.snippet !== 'string'
-  ) return false;
+  ) return null;
   try {
-    return new URL(source.url).protocol === 'https:';
+    if (new URL(source.url).protocol !== 'https:') return null;
+    return {
+      title: source.title,
+      url: source.url,
+      snippet: source.snippet,
+      contentType: source.contentType === 'page_excerpt' ? 'page_excerpt' : 'search_summary',
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -42,7 +48,7 @@ function loadConversation(): Message[] {
         typeof message.content !== 'string'
       ) return [];
       const sources = Array.isArray(message.sources)
-        ? message.sources.filter(isSource)
+        ? message.sources.map(parseSource).filter((source): source is Source => !!source)
         : undefined;
       return [{
         role: message.role,
@@ -254,8 +260,7 @@ function ChatHome() {
               <div className="eyebrow mb-3">Ready when you are</div>
               <h2 className="empty-title">Give your adapter<br />something to think about.</h2>
               <p className="empty-description">
-                Choose Local for concise explanations, or Research to search current web summaries and see linked sources.
-                Search results can be incomplete, so verify important claims.
+                Local Qwen is experimental. Research opens source pages and shows relevant passages; if a page cannot be read, it labels the search summary. Verify important claims.
               </p>
               <div className="suggestions" aria-label="Example prompts">
                 {[
@@ -289,7 +294,11 @@ function ChatHome() {
                   </div>
                   <div className="min-w-0">
                     <div className="message-meta">
-                      <span className="message-name">{message.role === 'assistant' ? 'Qwen adapter' : 'You'}</span>
+                      <span className="message-name">
+                        {message.role === 'assistant'
+                          ? message.sources?.length ? 'Source summary' : 'Qwen adapter'
+                          : 'You'}
+                      </span>
                       <span className="message-role">
                         {message.role === 'assistant'
                           ? message.sources?.length ? 'WEB RESEARCH' : 'LOCAL REASONING'
@@ -312,11 +321,16 @@ function ChatHome() {
                               <span>{source.title}</span>
                               <ExternalLink size={12} aria-hidden="true" />
                             </span>
-                            <span className="source-host">{new URL(source.url).hostname.replace(/^www\./, '')}</span>
+                            <span className="source-detail">
+                              <span className="source-host">{new URL(source.url).hostname.replace(/^www\./, '')}</span>
+                              <span className="source-type">
+                                {source.contentType === 'page_excerpt' ? 'PAGE EXCERPT' : 'SEARCH SUMMARY'}
+                              </span>
+                            </span>
                             <span className="source-snippet">{source.snippet}</span>
                           </a>
                         ))}
-                        <p className="source-disclaimer">Search-result summaries only; open sources to verify details.</p>
+                        <p className="source-disclaimer">Page excerpts are used when available; otherwise these are search summaries. Open sources to verify.</p>
                       </div>
                     )}
                   </div>
@@ -327,8 +341,8 @@ function ChatHome() {
                   <div className="message-avatar assistant" aria-hidden="true"><Bot size={16} /></div>
                   <div>
                     <div className="message-meta">
-                      <span className="message-name">Qwen adapter</span>
-                      <span className="message-role">GENERATING</span>
+                      <span className="message-name">{mode === 'research' ? 'Source summary' : 'Qwen adapter'}</span>
+                        <span className="message-role">{mode === 'research' ? 'READING SOURCES' : 'GENERATING'}</span>
                     </div>
                     <div className="typing-line" aria-label="Generating reply"><span /><span /><span /></div>
                   </div>
@@ -356,7 +370,9 @@ function ChatHome() {
 
         <div className="composer-wrap">
           <form className="composer" onSubmit={onSubmit} data-testid="form-chat">
-            <label className="sr-only" htmlFor="chat-composer">Message the Qwen adapter</label>
+            <label className="sr-only" htmlFor="chat-composer">
+              {mode === 'research' ? 'Ask a web research question' : 'Message the Qwen adapter'}
+            </label>
             <textarea
               id="chat-composer"
               ref={textAreaRef}
@@ -381,8 +397,8 @@ function ChatHome() {
           </form>
           <div className={`mode-caption ${mode === 'research' ? 'research' : ''}`}>
             {mode === 'research'
-              ? 'Research mode searches current web summaries and attaches source links.'
-              : 'Local mode explains key steps and flags uncertainty.'}
+              ? 'Research extracts relevant page passages directly so Qwen cannot rewrite the facts. Search summaries are labeled.'
+              : 'Local Qwen is experimental; verify its answers.'}
           </div>
           <div className="composer-foot">
             <span className="footer-note"><Check size={12} /> Conversation saved in this browser</span>

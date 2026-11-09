@@ -15,4 +15,5 @@ export * from './chatMessageInput';
 export * from './chatMessageInputRole';
 export * from './chatOutput';
 export * from './chatSource';
+export * from './chatSourceContentType';
 export * from './healthStatus';

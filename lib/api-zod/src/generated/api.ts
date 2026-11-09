@@ -42,7 +42,8 @@ export const SendChatMessageResponse = zod.object({
   "sources": zod.array(zod.object({
   "title": zod.string(),
   "url": zod.string().url(),
-  "snippet": zod.string()
+  "snippet": zod.string(),
+  "contentType": zod.enum(['page_excerpt', 'search_summary'])
 }))
 })
 })

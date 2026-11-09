@@ -388,6 +388,17 @@
   color: hsl(var(--primary));
   font: 10px var(--app-font-mono);
 }
+.source-detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.source-type {
+  color: hsl(var(--muted-foreground));
+  font: 9px var(--app-font-mono);
+  letter-spacing: .06em;
+}
 .source-snippet {
   display: -webkit-box;
   overflow: hidden;

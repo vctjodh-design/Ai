@@ -132,7 +132,10 @@ components:
           format: uri
         snippet:
           type: string
-      required: [title, url, snippet]
+        contentType:
+          type: string
+          enum: [page_excerpt, search_summary]
+      required: [title, url, snippet, contentType]
     ChatOutput:
       type: object
       properties:

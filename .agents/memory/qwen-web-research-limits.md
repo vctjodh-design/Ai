@@ -3,8 +3,10 @@ name: Qwen web research limits
 description: The evidence and citation limits of Qwen Chat's integration-free research mode.
 ---
 
-Research mode currently uses public web search result summaries rather than fetching full source pages. Keep prompts grounded in those summaries, show the source links, and make the limitation visible to users. Do not claim the source pages were opened or independently verified. If a connected research provider is enabled later, reassess the evidence path and explain which sources support the answer.
+Research mode reads bounded excerpts from public HTTPS pages when accessible and otherwise falls back to a clearly labeled search summary. The user chose to keep local Qwen and avoid a billable remote model. Research answers should therefore quote relevant source passages with citations rather than rely on Qwen to paraphrase evidence it may distort. Keep the limitations visible; do not claim a page was read when only its search summary was available.
 
-**Why:** The user chose to continue without connecting the proposed search integration; search snippets provide a no-key path but weaker evidence than reading source pages.
+Local generation is fail-closed: reject prompt echoes, runaway repetition, and long off-topic answers rather than displaying a cleaned fragment as if it were reliable. Simple greetings and match-score predictions receive direct responses instead of being sent to the weak local model.
 
-**How to apply:** When changing the research flow, preserve honest source attribution and do not overstate certainty or coverage.
+**Why:** The user declined the search integration and selected local Qwen over a stronger model that would use Replit credits. Source-based excerpts avoid inventing a paraphrase when the local model produces malformed answers.
+
+**How to apply:** Keep local Qwen available, fail explicitly on malformed output, display whether each source is a page excerpt or search summary, and do not add a billable remote model without asking first.
