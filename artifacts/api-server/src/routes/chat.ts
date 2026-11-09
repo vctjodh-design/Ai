@@ -178,6 +178,187 @@ function needsCurrentSources(question: string): boolean {
   );
 }
 
+type OutcomeRecord = { wins: number; draws: number; losses: number; games: number };
+
+type RecentTeamStats = {
+  name: string;
+  overall: OutcomeRecord;
+  goalsScored: number;
+  goalsConceded: number;
+  over25Percent: number;
+  home?: OutcomeRecord;
+  away?: OutcomeRecord;
+};
+
+function readNumber(source: string, pattern: RegExp): number | undefined {
+  const match = source.match(pattern);
+  return match ? Number(match[1]) : undefined;
+}
+
+function readRecord(source: string, scope: "overall" | "home" | "away"): OutcomeRecord | undefined {
+  const playedPattern = scope === "overall" ? 15 : undefined;
+  const prefix = scope === "home" ? "Home\\s+" : scope === "away" ? "Away\\s+" : "";
+  const denominator = playedPattern ? String(playedPattern) : "(\\d+)";
+  const winMatch = source.match(new RegExp(`\\b${prefix}Wins\\s*(\\d+)\\s*\\/\\s*${denominator}\\b`, "i"));
+  const drawMatch = source.match(new RegExp(`\\b${prefix}Draws\\s*(\\d+)\\s*\\/\\s*${denominator}\\b`, "i"));
+  const lossMatch = source.match(new RegExp(`\\b${prefix}Losses\\s*(\\d+)\\s*\\/\\s*${denominator}\\b`, "i"));
+  if (!winMatch || !drawMatch || !lossMatch) return undefined;
+
+  const games = playedPattern ? 15 : Number(winMatch[2]);
+  return {
+    wins: Number(winMatch[1]),
+    draws: Number(drawMatch[1]),
+    losses: Number(lossMatch[1]),
+    games,
+  };
+}
+
+function parseRecentTeamStats(input: string): RecentTeamStats[] | undefined {
+  const h2hIndex = input.search(/\bH2H\b/i);
+  const statsText = h2hIndex >= 0 ? input.slice(0, h2hIndex) : input;
+  const headers = [...statsText.matchAll(/^\s*(.+?)\s+last\s+15\s+games?\b/gim)];
+  if (headers.length < 2) return undefined;
+
+  const teams = headers.slice(0, 2).map((header, index): RecentTeamStats | undefined => {
+    const start = header.index ?? 0;
+    const end = headers[index + 1]?.index ?? statsText.length;
+    const section = statsText.slice(start, end);
+    const overall = readRecord(section, "overall");
+    const goalsScored = readNumber(section, /\bAvg\.?\s*Goals\s*Scored\s*:?\s*([\d.]+)/i);
+    const goalsConceded = readNumber(section, /\bAvg\.?\s*Goals\s*Conceded\s*:?\s*([\d.]+)/i);
+    const over25Percent = readNumber(section, /\bOver\s*2\.5\s*:?\s*([\d.]+)\s*%/i);
+    if (
+      !overall ||
+      goalsScored === undefined ||
+      goalsConceded === undefined ||
+      over25Percent === undefined
+    ) {
+      return undefined;
+    }
+
+    return {
+      name: header[1].trim(),
+      overall,
+      goalsScored,
+      goalsConceded,
+      over25Percent,
+      home: readRecord(section, "home"),
+      away: readRecord(section, "away"),
+    };
+  });
+
+  return teams.length === 2 && teams.every((team): team is RecentTeamStats => !!team)
+    ? teams
+    : undefined;
+}
+
+function poissonDistribution(lambda: number, maxGoals = 12): number[] {
+  const probabilities = [Math.exp(-lambda)];
+  for (let goals = 1; goals <= maxGoals; goals += 1) {
+    probabilities.push((probabilities[goals - 1] * lambda) / goals);
+  }
+  return probabilities;
+}
+
+function normalized(values: number[]): number[] {
+  const total = values.reduce((sum, value) => sum + value, 0);
+  return total > 0 ? values.map((value) => value / total) : values;
+}
+
+function buildFootballPrediction(question: string): string | undefined {
+  if (
+    !/\b1x2\b/i.test(question) ||
+    !/\b(?:btts|butts|both teams to score)\b/i.test(question) ||
+    !/\b2\.5\b/.test(question)
+  ) {
+    return undefined;
+  }
+
+  const [home, away] = parseRecentTeamStats(question) ?? [];
+  if (!home || !away) return undefined;
+
+  const expectedHomeGoals = (home.goalsScored + away.goalsConceded) / 2;
+  const expectedAwayGoals = (away.goalsScored + home.goalsConceded) / 2;
+  const homeGoals = poissonDistribution(expectedHomeGoals);
+  const awayGoals = poissonDistribution(expectedAwayGoals);
+  let poissonHome = 0;
+  let poissonDraw = 0;
+  let poissonAway = 0;
+
+  homeGoals.forEach((homeProbability, homeCount) => {
+    awayGoals.forEach((awayProbability, awayCount) => {
+      const probability = homeProbability * awayProbability;
+      if (homeCount > awayCount) poissonHome += probability;
+      else if (homeCount === awayCount) poissonDraw += probability;
+      else poissonAway += probability;
+    });
+  });
+
+  const form = normalized([
+    (home.overall.wins / home.overall.games + away.overall.losses / away.overall.games) / 2,
+    (home.overall.draws / home.overall.games + away.overall.draws / away.overall.games) / 2,
+    (home.overall.losses / home.overall.games + away.overall.wins / away.overall.games) / 2,
+  ]);
+  let probabilities = [
+    poissonHome * 0.5 + form[0] * 0.5,
+    poissonDraw * 0.5 + form[1] * 0.5,
+    poissonAway * 0.5 + form[2] * 0.5,
+  ];
+
+  if (home.home && away.away) {
+    const venue = normalized([
+      (home.home.wins / home.home.games + away.away.losses / away.away.games) / 2,
+      (home.home.draws / home.home.games + away.away.draws / away.away.games) / 2,
+      (home.home.losses / home.home.games + away.away.wins / away.away.games) / 2,
+    ]);
+    probabilities = normalized([
+      probabilities[0] * 0.8 + venue[0] * 0.2,
+      probabilities[1] * 0.8 + venue[1] * 0.2,
+      probabilities[2] * 0.8 + venue[2] * 0.2,
+    ]);
+  }
+
+  const h2hText = question.match(/\bH2H\b([\s\S]*)/i)?.[1] ?? "";
+  const h2hScores = [...h2hText.matchAll(/\b(\d+)\s*[-–]\s*(\d+)\b/g)]
+    .map((match) => [Number(match[1]), Number(match[2])] as const);
+  const h2hOverCount = h2hScores.filter(([first, second]) => first + second >= 3).length;
+  const h2hBttsCount = h2hScores.filter(([first, second]) => first > 0 && second > 0).length;
+  const expectedTotalGoals = expectedHomeGoals + expectedAwayGoals;
+  const poissonUnder25 =
+    Math.exp(-expectedTotalGoals) *
+    (1 + expectedTotalGoals + (expectedTotalGoals * expectedTotalGoals) / 2);
+  const recentUnder25 = 1 - (home.over25Percent + away.over25Percent) / 200;
+  const under25Estimate = (poissonUnder25 + recentUnder25) / 2;
+  const bttsYesFromGoals =
+    (1 - Math.exp(-expectedHomeGoals)) * (1 - Math.exp(-expectedAwayGoals));
+  const h2hBttsRate = h2hScores.length ? h2hBttsCount / h2hScores.length : undefined;
+  const bttsYesEstimate =
+    h2hBttsRate === undefined
+      ? bttsYesFromGoals
+      : bttsYesFromGoals * 0.6 + h2hBttsRate * 0.4;
+
+  const formattedPercent = (value: number) => `${Math.round(value * 100)}%`;
+  const pick = probabilities[0] >= probabilities[1] && probabilities[0] >= probabilities[2]
+    ? `1 (${home.name} win)`
+    : probabilities[1] >= probabilities[2]
+      ? "X (draw)"
+      : `2 (${away.name} win)`;
+  const overUnderPick = under25Estimate >= 0.5 ? "Under 2.5" : "Over 2.5";
+  const bttsPick = bttsYesEstimate >= 0.5 ? "BTTS: Yes" : "BTTS: No";
+  const h2hLine = h2hScores.length
+    ? `The listed H2H scores are ${h2hOverCount}/${h2hScores.length} over 2.5 and ${h2hBttsCount}/${h2hScores.length} BTTS.`
+    : "";
+
+  return [
+    `**1X2:** ${pick} — rough estimates: 1 ${formattedPercent(probabilities[0])}, X ${formattedPercent(probabilities[1])}, 2 ${formattedPercent(probabilities[2])}.`,
+    `**BTTS:** ${bttsPick} — a narrow lean, not a strong edge.`,
+    `**Over/Under 2.5:** ${overUnderPick} — the supplied recent rates and goal averages put this close to 50/50.`,
+    `Estimated goals from the two teams' averages: ${expectedHomeGoals.toFixed(2)}–${expectedAwayGoals.toFixed(2)} (total ${expectedTotalGoals.toFixed(2)}).`,
+    h2hLine,
+    "This is a simple estimate from the figures you supplied, not a calibrated betting model or a guarantee. The H2H totals conflict with the recent rates, so treat the totals and BTTS picks as low confidence.",
+  ].filter(Boolean).join("\n\n");
+}
+
 function isIdentityQuestion(question: string): boolean {
   return /\bwho\s+(?:is|was)\b/i.test(question);
 }
@@ -449,16 +630,6 @@ router.post("/chat", async (req, res): Promise<void> => {
       return;
     }
 
-    if (mode === "research" || (mode === "local" && needsCurrentSources(latestQuestion))) {
-      const sources = await researchWeb(latestQuestion);
-      const answer = buildEvidenceSummary(latestQuestion, sources);
-      const response = SendChatMessageResponse.parse({
-        message: { role: "assistant", content: answer, sources },
-      });
-      res.json(response);
-      return;
-    }
-
     if (
       /\b(?:predict|prediction|guess)\b/i.test(latestQuestion) &&
       /\b(?:score|result|winner)\b/i.test(latestQuestion)
@@ -469,6 +640,29 @@ router.post("/chat", async (req, res): Promise<void> => {
           content: "I can't reliably predict a match score. Research mode can verify a reported result after a match, but it can't tell the future.",
           sources: [],
         },
+      });
+      res.json(response);
+      return;
+    }
+
+    const footballPrediction = buildFootballPrediction(latestQuestion);
+    if (footballPrediction) {
+      const response = SendChatMessageResponse.parse({
+        message: {
+          role: "assistant",
+          content: footballPrediction,
+          sources: [],
+        },
+      });
+      res.json(response);
+      return;
+    }
+
+    if (mode === "research" || (mode === "local" && needsCurrentSources(latestQuestion))) {
+      const sources = await researchWeb(latestQuestion);
+      const answer = buildEvidenceSummary(latestQuestion, sources);
+      const response = SendChatMessageResponse.parse({
+        message: { role: "assistant", content: answer, sources },
       });
       res.json(response);
       return;
