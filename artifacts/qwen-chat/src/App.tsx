@@ -260,7 +260,7 @@ function ChatHome() {
               <div className="eyebrow mb-3">Ready when you are</div>
               <h2 className="empty-title">Give your adapter<br />something to think about.</h2>
               <p className="empty-description">
-                Local Qwen is experimental. Research opens source pages and shows relevant passages; if a page cannot be read, it labels the search summary. Verify important claims.
+                Local Qwen is experimental and may be out of date. Identity and current-fact questions are checked against web sources; date questions use the current Africa/Conakry date.
               </p>
               <div className="suggestions" aria-label="Example prompts">
                 {[
@@ -398,7 +398,7 @@ function ChatHome() {
           <div className={`mode-caption ${mode === 'research' ? 'research' : ''}`}>
             {mode === 'research'
               ? 'Research extracts relevant page passages directly so Qwen cannot rewrite the facts. Search summaries are labeled.'
-              : 'Local Qwen is experimental; verify its answers.'}
+              : 'Experimental local answers; current facts are source-checked and date questions use the live clock.'}
           </div>
           <div className="composer-foot">
             <span className="footer-note"><Check size={12} /> Conversation saved in this browser</span>
