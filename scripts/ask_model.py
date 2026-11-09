@@ -13,7 +13,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "models" / "qwen2.5-0.5b"
-ADAPTER_DIR = ROOT / "models" / "qwen2.5-0.5b-reasoning-adapter"
+DEFAULT_ADAPTER_DIR = ROOT / "models" / "qwen2.5-0.5b-reasoning-adapter-full"
 SYSTEM_PROMPT = (
     "You are a helpful assistant. Answer accurately. For multi-step problems, "
     "explain the key steps briefly and state the final answer. Be clear when "
@@ -25,11 +25,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("question", nargs="*", help="Question to ask.")
     parser.add_argument("--max-new-tokens", type=int, default=160)
+    parser.add_argument(
+        "--adapter-dir",
+        type=Path,
+        default=DEFAULT_ADAPTER_DIR,
+        help="Directory containing the trained LoRA adapter.",
+    )
     args = parser.parse_args()
 
-    if not (ADAPTER_DIR / "adapter_config.json").is_file():
+    if not (args.adapter_dir / "adapter_config.json").is_file():
         raise FileNotFoundError(
-            "The LoRA adapter is missing. Run scripts/train_lora.py first."
+            f"The LoRA adapter is missing: {args.adapter_dir}. "
+            "Run scripts/train_lora.py first."
         )
     question = " ".join(args.question).strip()
     if not question:
@@ -38,7 +45,7 @@ def main() -> None:
         raise ValueError("Enter a question.")
 
     tokenizer = AutoTokenizer.from_pretrained(
-        ADAPTER_DIR,
+        args.adapter_dir,
         local_files_only=True,
         use_fast=True,
     )
@@ -48,7 +55,7 @@ def main() -> None:
         torch_dtype=torch.float32,
         low_cpu_mem_usage=True,
     )
-    model = PeftModel.from_pretrained(base, ADAPTER_DIR, is_trainable=False)
+    model = PeftModel.from_pretrained(base, args.adapter_dir, is_trainable=False)
     model.eval()
 
     messages = [

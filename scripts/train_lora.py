@@ -44,7 +44,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--cpu-threads", type=int, default=4)
-    parser.add_argument("--eval-examples", type=int, default=12)
+    parser.add_argument(
+        "--eval-examples",
+        type=int,
+        default=0,
+        help="Maximum validation examples; use 0 to evaluate the complete split.",
+    )
     parser.add_argument("--checkpoint-steps", type=int, default=20)
     parser.add_argument("--seed", type=int, default=23)
     return parser.parse_args()
@@ -125,13 +130,16 @@ def evaluate(
     if not examples:
         return None
     model.eval()
-    losses = []
+    total_loss = 0.0
+    total_tokens = 0
     with torch.inference_mode():
         for example in examples:
             batch = make_batch(example, pad_token_id)
-            losses.append(float(model(**batch).loss.item()))
+            target_tokens = int((batch["labels"] != -100).sum().item())
+            total_loss += float(model(**batch).loss.item()) * target_tokens
+            total_tokens += target_tokens
     model.train()
-    return sum(losses) / len(losses)
+    return total_loss / total_tokens if total_tokens else None
 
 
 def main() -> None:
@@ -185,7 +193,8 @@ def main() -> None:
     rng.shuffle(train_examples)
     if args.max_train_examples:
         train_examples = train_examples[: args.max_train_examples]
-    validation_examples = validation_examples[: args.eval_examples]
+    if args.eval_examples:
+        validation_examples = validation_examples[: args.eval_examples]
 
     print(
         f"Training on CPU with {len(train_examples)} examples; "
