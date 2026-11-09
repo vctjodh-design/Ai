@@ -151,7 +151,7 @@ def generate_math_answers(
     results = []
     correct = 0
     model.eval()
-    for row in rows:
+    for index, row in enumerate(rows, start=1):
         messages = row["messages"]
         prompt = tokenizer.apply_chat_template(
             messages[:-1],
@@ -159,16 +159,19 @@ def generate_math_answers(
             add_generation_prompt=True,
             return_tensors="pt",
         )
+        prompt_ids = getattr(prompt, "input_ids", None)
+        if prompt_ids is None:
+            prompt_ids = prompt["input_ids"] if isinstance(prompt, dict) else prompt
         with torch.inference_mode():
             output = model.generate(
-                prompt,
+                prompt_ids,
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
             )
         prediction_text = tokenizer.decode(
-            output[0, prompt.shape[1] :], skip_special_tokens=True
+            output[0, prompt_ids.shape[1] :], skip_special_tokens=True
         ).strip()
         expected_text = messages[-1]["content"]
         expected = normalize_final_answer(expected_text)

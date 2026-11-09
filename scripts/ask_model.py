@@ -62,12 +62,15 @@ def main() -> None:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": question},
     ]
-    input_ids = tokenizer.apply_chat_template(
+    prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=True,
         add_generation_prompt=True,
         return_tensors="pt",
     )
+    input_ids = getattr(prompt, "input_ids", None)
+    if input_ids is None:
+        input_ids = prompt["input_ids"] if isinstance(prompt, dict) else prompt
     with torch.inference_mode():
         output = model.generate(
             input_ids,

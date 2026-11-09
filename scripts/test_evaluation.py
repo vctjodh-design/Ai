@@ -5,7 +5,11 @@ import unittest
 
 import torch
 
-from evaluate_model import normalize_final_answer, score_language_model
+from evaluate_model import (
+    generate_math_answers,
+    normalize_final_answer,
+    score_language_model,
+)
 
 
 class NormalizeFinalAnswerTests(unittest.TestCase):
@@ -49,6 +53,46 @@ class ScoreLanguageModelTests(unittest.TestCase):
         report = score_language_model(FixedLossModel(), examples, pad_token_id=0)
         self.assertEqual(report["target_tokens"], 4)
         self.assertEqual(report["mean_token_nll"], 3.5)
+
+
+class GenerateMathAnswersTests(unittest.TestCase):
+    def test_generates_and_scores_each_row(self) -> None:
+        class FixedModel:
+            def eval(self) -> None:
+                return None
+
+            def generate(self, prompt, **_kwargs):
+                return torch.cat([prompt, torch.tensor([[2]])], dim=1)
+
+        class FixedTokenizer:
+            def apply_chat_template(self, _messages, **_kwargs):
+                return SimpleNamespace(input_ids=torch.tensor([[1]]))
+
+            def decode(self, _tokens, **_kwargs):
+                return "Final answer: 4"
+
+            pad_token_id = 0
+            eos_token_id = 2
+
+        row = {
+            "messages": [
+                {"role": "system", "content": "Solve the problem."},
+                {"role": "user", "content": "What is 2 + 2?"},
+                {"role": "assistant", "content": "Final answer: 4"},
+            ]
+        }
+
+        report = generate_math_answers(
+            FixedModel(),
+            FixedTokenizer(),
+            [row],
+            max_new_tokens=8,
+        )
+
+        self.assertEqual(report["examples"], 1)
+        self.assertEqual(report["correct"], 1)
+        self.assertEqual(report["accuracy"], 1.0)
+        self.assertEqual(report["items"][0]["question"], "What is 2 + 2?")
 
 
 if __name__ == "__main__":
